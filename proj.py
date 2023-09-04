@@ -40,8 +40,6 @@ def google_api_vol_req_generator(
     req = request.Request(getrequest)
     response = request.urlopen(req).read()
 
-    print(response)
-
     return response
 
 
