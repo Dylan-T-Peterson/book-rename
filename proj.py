@@ -5,7 +5,7 @@ from glob import iglob
 from ebooklib import epub
 
 
-# def google_api_vol_req_generator(
+# def google_api_req_generator(
 def test(
     api_key: str,
     intitle: str = "",
@@ -30,6 +30,7 @@ def test(
 
     user_search = input("Input search terms: ")
 
+    # Filters out empty parameters from keywords var
     nullkw = []
     for key in keywords:
         if keywords[key] == "":
@@ -38,6 +39,7 @@ def test(
         del keywords[key]
     del nullkw
 
+    # Creates request URI and sends it to Google Books API
     getrequest = uri + user_search
     for key, val in keywords.items():
         getrequest = getrequest + f"+{key}{val}"
@@ -48,17 +50,28 @@ def test(
     return response
 
 
-def google_api_parser(api_req: str):
+def google_api_parser(api_response: str):
     pass
 
 
 def title_epub(file: str):
+    # Filters out any file w/o valid title metadata
+    NONOCHARS = r"""#%*/+={}<>\$@"'`|!?"""
+    CHARPAIRS = {
+        "&": "and",
+        "-": " ",
+        "_": " ",
+        ": ": "_",
+        " ": "-",
+    }
+
     try:
         book = epub.read_epub(file)
     except Exception as e:
         print(f"\n\n{file}\n{e} -- err\n\n")
         return
 
+    # Pulls and processes Title Metadata for second verification
     identifier = book.get_metadata("DC", "identifier")
     if "ISBN" in identifier[0][1].values():
         isbn = identifier[0][0]
@@ -69,16 +82,29 @@ def title_epub(file: str):
                     string.whitespace
                     }""",
         )
-        isbn_strip = isbn.replace("-", "")
-        if len(isbn_strip) in (10, 13):
-            print(file)
-            print(isbn, "\n")
-        # else:
-        #     print(file)
-        #     print(isbn, "- long", "\n")
+        if len(isbn.replace("-", "")) not in (10, 13):
+            print(f"\n\n{file}\nBook does not have a valid ISBN -- err\n\n")
+            return
+
+        print(file)
+        print(isbn, "\n")
+        title = ""
 
     else:
-        pass
+        title = book.get_metadata("DC", "title")[0][0]
+
+    for var in (" /", "/"):
+        title = title.split(var)[0]
+
+    for char in NONOCHARS:
+        title = title.replace(char, "")
+
+    for old, new in CHARPAIRS.items():
+        title = title.replace(old, new)
+    title = title.lower()
+
+    if title != "":
+        print(f"\n{title} - {file}\n")
 
 
 def main():
