@@ -1,4 +1,7 @@
+import urllib
+import re
 import urllib.request as request
+import json
 import string
 from glob import iglob
 
@@ -15,7 +18,8 @@ def test(
     isbn: str = "",
     lccn: str = "",
     oclc: str = "",
-) -> request.Request:
+    userin: str = "",
+) -> dict[str, str]:
     uri = "https://www.googleapis.com/books/v1/volumes?q="
     api_key = api_key
     keywords = {
@@ -28,7 +32,7 @@ def test(
         "oclc:": f"{oclc}",  # Online Computer Library Center Number
     }
 
-    user_search = input("Input search terms: ")
+    user_search = userin
 
     # Filters out empty parameters from keywords var
     nullkw = []
@@ -41,20 +45,24 @@ def test(
 
     # Creates request URI and sends it to Google Books API
     getrequest = uri + user_search
-    for key, val in keywords.items():
-        getrequest = getrequest + f"+{key}{val}"
+    if keywords != {}:
+        for key, val in keywords.items():
+            getrequest = getrequest + f"+{key}{val}"
+    else:
+        return {}
     getrequest = getrequest + f"&key={api_key}"
+    getrequest = re.sub(r"[^\x00-\x7F]+", "", getrequest)
     req = request.Request(getrequest)
-    response = request.urlopen(req).read()
-
+    try:
+        response = request.urlopen(req).read().decode()
+    except request.HTTPError:
+        print(f"isbn='{isbn}' k,v={keywords} {getrequest} // bad req -- err")
+        return {}
+    response = json.loads(response)
     return response
 
 
-def google_api_parser(api_response: str):
-    pass
-
-
-def title_epub(file: str):
+def title_epub(file: str, apikey: str = ""):
     # Filters out any file w/o valid title metadata
     NONOCHARS = r"""#%*/+={}<>\$@"'`|!?"""
     CHARPAIRS = {
@@ -64,16 +72,18 @@ def title_epub(file: str):
         ": ": "_",
         " ": "-",
     }
+    title = ""
 
     try:
         book = epub.read_epub(file)
     except Exception as e:
-        print(f"\n\n{file}\n{e} -- err\n\n")
+        print(f"\n\n{file} // {e} -- err\n\n")
         return
 
     # Pulls and processes Title Metadata for second verification
     identifier = book.get_metadata("DC", "identifier")
-    if "ISBN" in identifier[0][1].values():
+    if (apikey != "") and ("ISBN" in identifier[0][1].values()):
+        # while title == "":
         isbn = identifier[0][0]
         isbn = isbn.strip(
             f"""{
@@ -82,18 +92,20 @@ def title_epub(file: str):
                     string.whitespace
                     }""",
         )
-        if len(isbn.replace("-", "")) not in (10, 13):
-            print(f"\n\n{file}\nBook does not have a valid ISBN -- err\n\n")
-            return
+        isbn = isbn.replace("-", "")
+        if len(isbn) not in (10, 13):
+            title = book.get_metadata("DC", "title")[0][0]
 
-        print(file)
-        print(isbn, "\n")
-        title = ""
+        api_response = test(api_key=apikey, isbn=isbn)
+        if ("totalItems" in api_response) and (int(api_response["totalItems"]) > 0):
+            title = api_response["items"][0]["volumeInfo"]["title"]
+        else:
+            title = book.get_metadata("DC", "title")[0][0]
 
     else:
         title = book.get_metadata("DC", "title")[0][0]
 
-    for var in (" /", "/"):
+    for var in (" /", "/" " :", ": "):
         title = title.split(var)[0]
 
     for char in NONOCHARS:
@@ -102,9 +114,12 @@ def title_epub(file: str):
     for old, new in CHARPAIRS.items():
         title = title.replace(old, new)
     title = title.lower()
+    title = title + ".epub"
 
-    if title != "":
-        print(f"\n{title} - {file}\n")
+    if title == "":
+        print(f"\n\n{file} {title} // no title -- err\n")
+        return
+    return title
 
 
 def main():
@@ -112,8 +127,11 @@ def main():
     api_key = open("apikey.txt", "r").read()
 
     for file in iglob(f"{path}*.epub"):
-        title_epub(file)
+        print(title_epub(file=file, apikey=api_key))
 
 
 if __name__ == "__main__":
+    # try:
     main()
+    # except Exception as e:
+    #     print(f"\n\n\n{e}\n\n\n")
