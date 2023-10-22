@@ -1,3 +1,4 @@
+from os import rename
 import urllib
 import re
 import urllib.request as request
@@ -63,7 +64,7 @@ def test(
 
 
 def title_epub(file: str, apikey: str = ""):
-    # Filters out any file w/o valid title metadata
+    # Filters out any file w/o valid metadata
     NONOCHARS = r"""#%*/+={}<>\$@"'`|!?"""
     CHARPAIRS = {
         "&": "and",
@@ -80,10 +81,9 @@ def title_epub(file: str, apikey: str = ""):
         print(f"\n\n{file} // {e} -- err\n\n")
         return
 
-    # Pulls and processes Title Metadata for second verification
+    # Pulls and processes title metadata for second verification
     identifier = book.get_metadata("DC", "identifier")
-    if (apikey != "") and ("ISBN" in identifier[0][1].values()):
-        # while title == "":
+    if (apikey != "") and (identifier != []) and ("ISBN" in identifier[0][1].values()):
         isbn = identifier[0][0]
         isbn = isbn.strip(
             f"""{
@@ -105,6 +105,11 @@ def title_epub(file: str, apikey: str = ""):
     else:
         title = book.get_metadata("DC", "title")[0][0]
 
+    if title == "":
+        print(f"\n\n{file} {title} // no title -- err\n")
+        return
+
+    # Formats title to be more computer/path friendly
     for var in (" /", "/" " :", ": "):
         title = title.split(var)[0]
 
@@ -114,11 +119,12 @@ def title_epub(file: str, apikey: str = ""):
     for old, new in CHARPAIRS.items():
         title = title.replace(old, new)
     title = title.lower()
+    title = re.sub(r"[.-]{2,}+", "-", title)
+    for var in ("-(-pdf", "-(-z-l"):
+        title = title.split(var)[0]
     title = title + ".epub"
+    title = re.sub(r"(.epub){2,}+", ".epub", title)
 
-    if title == "":
-        print(f"\n\n{file} {title} // no title -- err\n")
-        return
     return title
 
 
@@ -128,10 +134,9 @@ def main():
 
     for file in iglob(f"{path}*.epub"):
         print(title_epub(file=file, apikey=api_key))
+        # newfile = path + title_epub(file=file, apikey=api_key)
+        # rename(file, newfile)
 
 
 if __name__ == "__main__":
-    # try:
     main()
-    # except Exception as e:
-    #     print(f"\n\n\n{e}\n\n\n")
