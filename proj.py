@@ -10,7 +10,7 @@ from ebooklib import epub
 
 
 # def google_api_req_generator(
-def test(
+def google_api_req_generator(
     api_key: str,
     intitle: str = "",
     inauthor: str = "",
@@ -96,7 +96,7 @@ def title_epub(file: str, apikey: str = ""):
         if len(isbn) not in (10, 13):
             title = book.get_metadata("DC", "title")[0][0]
 
-        api_response = test(api_key=apikey, isbn=isbn)
+        api_response = google_api_req_generator(api_key=apikey, isbn=isbn)
         if ("totalItems" in api_response) and (int(api_response["totalItems"]) > 0):
             title = api_response["items"][0]["volumeInfo"]["title"]
         else:
@@ -119,12 +119,16 @@ def title_epub(file: str, apikey: str = ""):
     for old, new in CHARPAIRS.items():
         title = title.replace(old, new)
     title = title.lower()
-    title = re.sub(r"[.-]{2,}+", "-", title)
+    title = re.sub(r"[^\x00-\x7F]+", "", title)
+    title = re.sub(r"[.-]{2,}", "-", title)
     for var in ("-(-pdf", "-(-z-l"):
         title = title.split(var)[0]
     title = title + ".epub"
-    title = re.sub(r"(.epub){2,}+", ".epub", title)
+    title = re.sub(r"(.epub){2,}", ".epub", title)
+    title = re.sub(r"[.]{2,}", ".", title)
 
+    # if (title == "test.epub") or (title == "leon-trotsky.epub") or (title is None):
+    #     print(title, file)
     return title
 
 
@@ -133,9 +137,11 @@ def main():
     api_key = open("apikey.txt", "r").read()
 
     for file in iglob(f"{path}*.epub"):
-        print(title_epub(file=file, apikey=api_key))
-        # newfile = path + title_epub(file=file, apikey=api_key)
-        # rename(file, newfile)
+        # title_epub(file=file, apikey=api_key)
+        # print(file)
+        # print(title_epub(file=file, apikey=api_key))
+        newfile = path + title_epub(file=file, apikey=api_key)
+        rename(file, newfile)
 
 
 if __name__ == "__main__":
